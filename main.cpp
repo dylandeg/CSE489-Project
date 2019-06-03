@@ -6,10 +6,19 @@
 #include <cstring>
 using namespace std;
 
+/*
+REFERENCES:
+    https://www.geeksforgeeks.org/socket-programming-cc/
+    https://cs.berry.edu/~nhamid/p2p/index.html
+    https://beej.us/guide/bgnet/html/single/bgnet.html#syscalls
+
+
+*/
+
+
+
 void startConnection();
 void startListening();
-void betterCin();
-bool containsChar(char *, char);
 
 int main(){
     string usrOpt;
@@ -19,7 +28,6 @@ int main(){
         cout << "Welcome to Dylan's P2P IM!" << endl;
         cout << "Enter '1' to connect, or '0' to wait for a connection. 'q' to quit." << endl;
         cin >> usrOpt;
-        cout << "You said: " << usrOpt << endl;   
         if(usrOpt == "q"){
             break;
         }else if(usrOpt == "1"){
@@ -36,7 +44,7 @@ void startConnection(){
     int sock = 0, valread; 
     struct sockaddr_in serv_addr; 
     char const *hello = "Hello from client"; 
-    char buffer[1024] = {0}; 
+     
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
     { 
         printf("\n Socket creation error \n"); 
@@ -58,19 +66,46 @@ void startConnection(){
         printf("\nConnection Failed \n"); 
         return; 
     } 
-    cout << "What would you like to say?" << endl;
-    char msg[1024];
-    cout << "you: ";
-    string grabinput;
-    getline(cin, grabinput);
-    strcpy(msg, grabinput.c_str());
+    cout << "PEER CONNECTED!" << endl;
+    cout << "Enter 'q' to quit" << endl;
+    
+    bool firstTime = true;
 
-    send(sock , msg , strlen(msg) , 0 ); 
-    valread = read( sock , buffer, 1024); 
-    cout << "them: " << buffer << endl;
+    while(true){
+        char msg[1024];
+        char buffer[1024] = {0};
+        cout << "you: ";
+        string grabinput;
+        
+        if(firstTime){
+            cin.ignore();
+            firstTime = false;
+        }
+        
+        getline(cin, grabinput);
+        strcpy(msg, grabinput.c_str());
 
+        send(sock , msg , strlen(msg) , 0 ); 
+
+        if(msg[0] == 'q'){
+            cout << "quitting..." << endl;
+            break;
+        }
+
+        valread = read( sock , buffer, 1024);
+
+        if(buffer[0] == 'q'){
+            cout << "PEER DISCONNECTED: quitting" << endl;
+            break;
+        }
+
+        cout << "them: " << buffer << endl;
+
+    }
+    
     shutdown(sock, SHUT_RDWR);
     close(sock);
+    cout << "DISCONNECTED!" << endl;
     return;
 }
 
@@ -79,7 +114,7 @@ void startListening() {
     struct sockaddr_in address; 
     int opt = 1; 
     int addrlen = sizeof(address); 
-    char buffer[1024] = {0}; 
+     
     char const *hello = "Hello from server"; 
        
     // Creating socket file descriptor 
@@ -112,49 +147,69 @@ void startListening() {
         perror("listen"); 
         exit(EXIT_FAILURE); 
     } 
+
+    cout << "Waiting for connection..." << endl;
+
     if ((new_socket = accept(server_fd, (struct sockaddr *)&address,  
                        (socklen_t*)&addrlen))<0) 
     { 
         perror("accept"); 
         exit(EXIT_FAILURE); 
     } 
-    valread = read( new_socket , buffer, 1024); 
-    cout << "them: " << buffer << endl;
-    cout << "what would you like to say?" << endl;
-    char msg[1024];
-    cout << "you: ";
-    string grabinput;
-    getline(cin, grabinput);
-    strcpy(msg, grabinput.c_str());
+    cout << "PEER CONNECTED!" << endl;
+    cout << "Enter 'q' to quit" << endl;
 
-    send(new_socket , msg , strlen(msg) , 0 );
+    bool firstTime = true;
+
+
+    while(true){
+        char buffer[1024] = {0};
+        
+        valread = read( new_socket , buffer, 1024); 
+
+        if(buffer[0] == 'q'){
+            cout << "PEER DISCONNECTED: quitting" << endl;
+            break;
+        }
+    
+        cout << "them: " << buffer << endl;
+        
+        
+        char msg[1024];
+        
+        cout << "you: ";
+
+        if(firstTime){
+            cin.ignore();
+            firstTime = false;
+        }
+
+        
+        string grabinput;
+        getline(cin, grabinput);
+        strcpy(msg, grabinput.c_str());
+
+        send(new_socket , msg , strlen(msg) , 0 );
+
+        if(msg[0] == 'q'){
+            cout << "quitting..." << endl;
+            break;
+        }
+
+    }
+    
+
 
     shutdown(server_fd, SHUT_RDWR);
     close(server_fd);
     shutdown(new_socket, SHUT_RDWR);
     close(server_fd);
+
+    cout << "DISCONNECTED!" << endl;
     return;
 }
 
-//Reads from cin until newline encountered cuz getline AND cin.getline suck.
-void betterCin(char *dest){
-    char * word;
-    cin >> word;
 
-    while(true){
-
-    }
-}
-
-//checks for a char in a Cstring.
-bool containsChar(char * word, char c){
-    for(int i = 0; i < sizeof(word); ++i){
-        if(word[i] == c){
-            return true;
-        }
-    }
-    return false;
-}
 
 void test(){
     //create sockets; send/listen
