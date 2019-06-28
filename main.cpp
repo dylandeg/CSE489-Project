@@ -40,67 +40,126 @@ int main(){
 
 }
 
-void startConnection(){
-    int sock = 0, valread; 
-    struct sockaddr_in serv_addr; 
-    char const *hello = "Hello from client"; 
-     
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-    { 
-        printf("\n Socket creation error \n"); 
-        return; 
-    } 
-   
-    serv_addr.sin_family = AF_INET; 
-    serv_addr.sin_port = htons(8080); 
+void init(int initType){
+
+    //Generic socket setup.
+    //Can go either way.... listen/connect
+    int sock_listen;
+    int sock_peer;
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);    
        
+    sock_listen = socket(AF_INET, SOCK_STREAM, 0);       
+    
+    address.sin_family = AF_INET; 
+    address.sin_port = htons(65500); 
+
+    bind(sock_listen, (struct sockaddr *)&address, sizeof(address));
+
+    //0 if listening, 1 if connecting.
+    if(initType == 0){
+        //any incoming IP address will be accepted.
+        address.sin_addr.s_addr = INADDR_ANY;
+
+        sock_listen = socket(AF_INET, SOCK_STREAM, 0);
+    }else{
+        sock_peer = socket(AF_INET, SOCK_STREAM, 0);
+
+        string target_IP;
+        cout << "Enter IP of Peer: ";
+        cin >> target_IP;
+
+        // Convert IPv4 and IPv6 addresses from text to binary form 
+        if(inet_pton(AF_INET, target_IP.c_str(), &address.sin_addr)<=0)  
+        { 
+            printf("\nInvalid address/ Address not supported \n"); 
+            return; 
+        }
+
+        if(connect(sock_peer, (struct sockaddr *)&address, sizeof(address)) == -1 ){
+        cout << "Connection Failed!" << endl;
+        return;
+    }
+   }
+}
+
+void startConnection(){
+    int sock = 0;
+    int bytesRead = 0; 
+    struct sockaddr_in peer_address; 
+     
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+   
+    peer_address.sin_family = AF_INET; 
+    peer_address.sin_port = htons(65500); 
+       
+    string target_IP;
+    cout << "Enter IP of Peer: ";
+    cin >> target_IP;
+
     // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    if(inet_pton(AF_INET, target_IP.c_str(), &peer_address.sin_addr)<=0)  
     { 
         printf("\nInvalid address/ Address not supported \n"); 
         return; 
     } 
-   
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
-    { 
-        printf("\nConnection Failed \n"); 
-        return; 
-    } 
+
+    if(connect(sock, (struct sockaddr *)&peer_address, sizeof(peer_address)) == -1 ){
+        cout << "Connection Failed!" << endl;
+        return;
+    }
+
     cout << "PEER CONNECTED!" << endl;
-    cout << "Enter 'q' to quit" << endl;
-    
-    bool firstTime = true;
+    cout << "Enter '<?q' to quit\nEnter '<?s [filepath]' to send a file" << endl;
+    cin.ignore();
+
+    int recvFlag = MSG_DONTWAIT;
 
     while(true){
-        char msg[1024];
-        char buffer[1024] = {0};
-        cout << "you: ";
-        string grabinput;
-        
-        if(firstTime){
-            cin.ignore();
-            firstTime = false;
+        char msg_out[1024] = {0};
+        char msg_in[1024] = {0};
+
+        while(true){
+            if(recv(sock, msg_in, sizeof(msg_in), recvFlag) > 0){
+                cout << "Them: " << msg_in << endl;
+            }else{
+                break;
+            }
         }
         
-        getline(cin, grabinput);
-        strcpy(msg, grabinput.c_str());
-
-        send(sock , msg , strlen(msg) , 0 ); 
-
-        if(msg[0] == 'q'){
-            cout << "quitting..." << endl;
-            break;
-        }
-
-        valread = read( sock , buffer, 1024);
-
-        if(buffer[0] == 'q'){
+        if(msg_in[0] == '<' && msg_in[1] == '?' && msg_in[3] == 'q'){
             cout << "PEER DISCONNECTED: quitting" << endl;
             break;
         }
 
-        cout << "them: " << buffer << endl;
 
+        if(msg_in[0] == '<' && msg_in[1] == '?' && msg_in[3] == 's'){
+            cout << "PEER DISCONNECTED: quitting" << endl;
+            break;
+        }
+
+        cout << "You: ";
+        string grabinput;
+
+        getline(cin, grabinput);
+        strcpy(msg_out, grabinput.c_str());
+
+        if(grabinput.size() == 0){
+            //recvFlag = 0;
+            cout << "Refreshing..." << endl;
+        }else{
+            recvFlag = MSG_DONTWAIT;
+            if(send(sock, msg_out, sizeof(msg_out), 0) <= 0){
+                cout << "send failed!!" << endl;
+            }
+        }
+
+        
+
+        if(msg_out[0] == 'q'){
+            cout << "quitting..." << endl;
+            break;
+        }
     }
     
     shutdown(sock, SHUT_RDWR);
@@ -110,125 +169,78 @@ void startConnection(){
 }
 
 void startListening() {
-    int server_fd, new_socket, valread; 
-    struct sockaddr_in address; 
-    int opt = 1; 
-    int addrlen = sizeof(address); 
-     
-    char const *hello = "Hello from server"; 
+    int sock_listen;
+    int sock_peer;
+    struct sockaddr_in address;
+    int addrlen = sizeof(address);    
        
-    // Creating socket file descriptor 
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) 
-    { 
-        perror("socket failed"); 
-        exit(EXIT_FAILURE); 
-    } 
-       
-    // Forcefully attaching socket to the port 8080 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, 
-                                                  &opt, sizeof(opt))) 
-    { 
-        perror("setsockopt"); 
-        exit(EXIT_FAILURE); 
-    } 
+    sock_listen = socket(AF_INET, SOCK_STREAM, 0);       
+    
     address.sin_family = AF_INET; 
     address.sin_addr.s_addr = INADDR_ANY; 
-    address.sin_port = htons( 8080 ); 
-       
-    // Forcefully attaching socket to the port 8080 
-    if (bind(server_fd, (struct sockaddr *)&address,  
-                                 sizeof(address))<0) 
-    { 
-        perror("bind failed"); 
-        exit(EXIT_FAILURE); 
-    } 
-    if (listen(server_fd, 3) < 0) 
-    { 
-        perror("listen"); 
-        exit(EXIT_FAILURE); 
-    } 
+    address.sin_port = htons(65500); 
+    
+    bind(sock_listen, (struct sockaddr *)&address, sizeof(address));
+
+    listen(sock_listen, 3);
 
     cout << "Waiting for connection..." << endl;
 
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address,  
-                       (socklen_t*)&addrlen))<0) 
-    { 
-        perror("accept"); 
-        exit(EXIT_FAILURE); 
-    } 
+    sock_peer = accept(sock_listen, (struct sockaddr *)&address, (socklen_t*)&addrlen);
+
     cout << "PEER CONNECTED!" << endl;
-    cout << "Enter 'q' to quit" << endl;
+    cout << "Enter '<?q' to quit\nEnter '<?s [filepath]' to send a file" << endl;
 
-    bool firstTime = true;
+    cin.ignore();
 
+    int recvFlag = MSG_DONTWAIT;
 
     while(true){
-        char buffer[1024] = {0};
-        
-        valread = read( new_socket , buffer, 1024); 
+        char msg_out[1024] = {0};
+        char msg_in[1024] = {0};
 
-        if(buffer[0] == 'q'){
+        while(true){
+            if(recv(sock_peer, msg_in, sizeof(msg_in), recvFlag) > 0){
+                cout << "Them: " << msg_in << endl;
+            }else{
+                recvFlag = MSG_DONTWAIT;
+                break;
+            }
+        }
+
+        if(msg_in[0] == 'q'){
             cout << "PEER DISCONNECTED: quitting" << endl;
             break;
         }
-    
-        cout << "them: " << buffer << endl;
-        
-        
-        char msg[1024];
-        
-        cout << "you: ";
 
-        if(firstTime){
-            cin.ignore();
-            firstTime = false;
+        cout << "You: ";
+
+        string grabinput;
+
+        getline(cin, grabinput);
+        strcpy(msg_out, grabinput.c_str());
+
+        if(grabinput.size() == 0){
+            //recvFlag = 0;
+            cout << "Refreshing..." << endl;
+        }else{
+            recvFlag = MSG_DONTWAIT;
+            if(send(sock_peer, msg_out, sizeof(msg_out), 0) <= 0){
+                cout << "send failed!!" << endl;
+            }
         }
 
-        
-        string grabinput;
-        getline(cin, grabinput);
-        strcpy(msg, grabinput.c_str());
-
-        send(new_socket , msg , strlen(msg) , 0 );
-
-        if(msg[0] == 'q'){
+        if(msg_out[0] == 'q'){
             cout << "quitting..." << endl;
             break;
         }
 
     }
     
-
-
-    shutdown(server_fd, SHUT_RDWR);
-    close(server_fd);
-    shutdown(new_socket, SHUT_RDWR);
-    close(server_fd);
-
+    shutdown(sock_listen, SHUT_RDWR);
+    close(sock_listen);
+    shutdown(sock_peer, SHUT_RDWR);
+    close(sock_peer);
     cout << "DISCONNECTED!" << endl;
     return;
-}
-
-
-
-void test(){
-    //create sockets; send/listen
-    int listenSock = socket(AF_INET, SOCK_STREAM, 0);
-
-    struct sockaddr_in addressListen;
-    
-    addressListen.sin_family = AF_INET; 
-    addressListen.sin_addr.s_addr = INADDR_ANY; 
-    addressListen.sin_port = htons( 8080 );
-
-    bind(listenSock, (struct sockaddr *)&addressListen, sizeof(addressListen));
-
-    listen(listenSock, 1);
-
-    int mySock = accept(listenSock, (struct sockaddr *)&addressListen, (socklen_t*)&addressListen);
-
-    char data[5000];
-
-    read(listenSock, data, 5000);
-
 }
